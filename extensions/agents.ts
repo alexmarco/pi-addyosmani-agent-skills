@@ -81,7 +81,9 @@ export async function registerUpstreamPersonas(
               "Pi capability boundary: this persona has read-only file tools only, with no shell or direct MCP tools. Use supplied performance artifacts or measurements from the calling agent; without measured data, follow Quick mode and label metrics not measured. Do not invent measurements or run local capture commands.",
             ]
           : []),
-      ].join("\n\n");
+      ]
+        .join("\n\n")
+        .trim();
 
       const request: RuntimeAgentRegistrationRequest = {
         version: 1,

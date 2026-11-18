@@ -56,6 +56,10 @@ test("registers upstream personas with original prompts and read-only capabiliti
         String(definition.systemPrompt),
         /Original persona instructions/,
       );
+      assert.equal(
+        String(definition.systemPrompt),
+        String(definition.systemPrompt).trim(),
+      );
       assert.match(
         String(definition.systemPrompt),
         /Resolve Markdown link destinations relative to the source file/,
