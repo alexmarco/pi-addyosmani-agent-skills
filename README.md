@@ -8,11 +8,11 @@ Install upstream and the subagent executor directly through Pi, then install thi
 
 ```bash
 pi install git:github.com/addyosmani/agent-skills
-pi install npm:pi-subagents
+pi install npm:pi-subagents@0.89.0
 pi install git:github.com/alexmarco/pi-addyosmani-agent-skills
 ```
 
-The adapter uses Pi's native skill discovery. It registers the nine upstream commands and connects the four upstream personas to `pi-subagents`. The executor is a separate Pi extension and must be installed for persona delegation.
+The adapter uses Pi's native skill discovery and automatically locates the upstream package from Pi resource metadata; no cache path configuration is needed. It registers the nine upstream commands and connects the four upstream personas to `pi-subagents`. The personas receive read-only file tools and cannot launch nested agents. The web-performance persona has no shell or direct MCP access; pass measurement artifacts to it. The executor is a separate Pi extension; version 0.89.0 or newer is required for persona delegation.
 
 ## Upstream compatibility
 
@@ -20,7 +20,7 @@ The adapter reads resources from the upstream installation discovered at runtime
 
 Upstream planning instructions use `tasks/todo.md` by default. If the user or project instructions designate another task manager, planning should use that target and keep `tasks/plan.md` as the plan and index.
 
-Upstream hooks are not included. See [the plan](tasks/plan.md) for scope and acceptance criteria.
+Upstream hooks are not included; implementation scope and acceptance criteria are tracked in this repository's project plan.
 
 ## Development
 
