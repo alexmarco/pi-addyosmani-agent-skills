@@ -7,9 +7,10 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { mock } from "node:test";
 import {
   discoverUpstreamRoot,
   parseMarkdownResource,
@@ -66,6 +67,97 @@ test("parses command and persona frontmatter without changing the body", () => {
   assert.equal(resource.metadata.name, "reviewer");
   assert.equal(resource.metadata.description, "Review code: carefully");
   assert.equal(resource.body, "\nKeep the original body.");
+});
+
+for (const replacement of ["directory junction", "different file"] as const) {
+  test(`rejects a ${replacement} replacement after path resolution`, async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "pi-resource-race-"));
+    const root = path.join(tempDir, "upstream");
+    const directory = path.join(root, "commands");
+    const externalDirectory = path.join(tempDir, "external");
+    const resource = path.join(directory, "review.md");
+    const originalRealpath = fs.realpath;
+    let swapped = false;
+
+    try {
+      await mkdir(directory, { recursive: true });
+      await mkdir(externalDirectory);
+      await writeFile(resource, "Trusted prompt");
+      await writeFile(
+        path.join(externalDirectory, "review.md"),
+        "Outside content",
+      );
+      const realpathMock = mock.method(
+        fs,
+        "realpath",
+        async (filename: string) => {
+          const resolved = await originalRealpath(filename);
+          if (filename === resource && !swapped) {
+            swapped = true;
+            if (replacement === "directory junction") {
+              await fs.rename(directory, `${directory}-original`);
+              await symlink(
+                externalDirectory,
+                directory,
+                process.platform === "win32" ? "junction" : "dir",
+              );
+            } else {
+              await fs.rename(resource, `${resource}-original`);
+              await fs.copyFile(
+                path.join(externalDirectory, "review.md"),
+                resource,
+              );
+            }
+          }
+          return resolved;
+        },
+      );
+      try {
+        await assert.rejects(
+          readUpstreamResource(root, "commands/review.md"),
+          /changed|outside.*upstream package/i,
+        );
+        assert.equal(swapped, true);
+      } finally {
+        realpathMock.mock.restore();
+      }
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+}
+
+test("reads the validated handle even if its path is replaced before reading", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "pi-resource-handle-"));
+  const resource = path.join(root, "review.md");
+  const originalRealpath = fs.realpath;
+  let resolutions = 0;
+  try {
+    await writeFile(resource, "Trusted prompt");
+    const realpathMock = mock.method(
+      fs,
+      "realpath",
+      async (filename: string) => {
+        const resolved = await originalRealpath(filename);
+        if (filename === resource && ++resolutions === 2) {
+          await fs.rename(resource, `${resource}-original`);
+          await writeFile(resource, "Replacement content");
+        }
+        return resolved;
+      },
+    );
+    try {
+      assert.equal(
+        await readUpstreamResource(root, "review.md"),
+        "Trusted prompt",
+      );
+      assert.equal(resolutions, 2);
+    } finally {
+      realpathMock.mock.restore();
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("reads only files contained in the dynamically discovered upstream root", async () => {

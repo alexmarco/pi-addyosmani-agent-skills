@@ -18,6 +18,8 @@ The adapter uses Pi's native skill discovery and automatically locates the upstr
 
 The adapter reads resources from the upstream installation discovered at runtime. It does not assume a fixed Pi cache path or modify upstream files. If upstream is missing or its required layout changes, the adapter reports the problem instead of silently using stale or copied content.
 
+Resource reads compare the opened file's identity with the file inspected before path resolution, recheck containment, and read through that same handle. On platforms that support it, opening also rejects final-component symbolic links. Keep the installed package and its parent directories writable only by trusted users: these checks are not a filesystem sandbox and do not prevent in-place content changes by a process that already has write access.
+
 Upstream planning instructions use `tasks/todo.md` by default. If the user or project instructions designate another task manager, planning should use that target and keep `tasks/plan.md` as the plan and index.
 
 Upstream hooks are not included; implementation scope and acceptance criteria are tracked in this repository's project plan.

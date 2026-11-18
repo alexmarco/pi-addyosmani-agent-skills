@@ -1,4 +1,5 @@
-import { realpath, readFile, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 
 export const UPSTREAM_PACKAGE_SOURCE = "git:github.com/addyosmani/agent-skills";
@@ -79,7 +80,7 @@ export async function readUpstreamResource(
   root: string,
   relativePath: string,
 ): Promise<string> {
-  const actualRoot = await realpath(root);
+  const actualRoot = await fs.realpath(root);
   const unresolvedPath = path.resolve(actualRoot, relativePath);
   if (!isWithin(actualRoot, unresolvedPath)) {
     throw new Error(
@@ -87,17 +88,39 @@ export async function readUpstreamResource(
     );
   }
 
-  const actualPath = await realpath(unresolvedPath);
+  const expectedFile = await fs.stat(unresolvedPath, { bigint: true });
+  if (!expectedFile.isFile()) {
+    throw new Error(`Upstream resource is not a file: ${relativePath}`);
+  }
+  const actualPath = await fs.realpath(unresolvedPath);
   if (!isWithin(actualRoot, actualPath)) {
     throw new Error(
       `Resource path is outside the upstream package: ${relativePath}`,
     );
   }
-  if (!(await stat(actualPath)).isFile()) {
-    throw new Error(`Upstream resource is not a file: ${relativePath}`);
-  }
 
-  return readFile(actualPath, "utf8");
+  // O_NOFOLLOW is unavailable on Windows; file identity is checked on every platform.
+  const file = await fs.open(
+    actualPath,
+    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+  );
+  try {
+    const openedFile = await file.stat({ bigint: true });
+    const currentPath = await fs.realpath(actualPath);
+    if (
+      !isWithin(actualRoot, currentPath) ||
+      !openedFile.isFile() ||
+      openedFile.dev !== expectedFile.dev ||
+      openedFile.ino !== expectedFile.ino
+    ) {
+      throw new Error(
+        `Upstream resource changed while opening: ${relativePath}`,
+      );
+    }
+    return await file.readFile("utf8");
+  } finally {
+    await file.close();
+  }
 }
 
 function isWithin(root: string, target: string): boolean {
